@@ -32,7 +32,7 @@ Build: `dotnet build UpRes.sln` · testes: `dotnet test` · publicar: `dotnet bu
 
 ## Fundamentos técnicos
 - O painel continua 1920×1080. Quem aceita (ou não) o 1440p é o **scaler**, que reduz a imagem. O ganho é área de trabalho, sem nitidez real.
-- **Timing padrão: CVT-RB 2560×1440 @ 60 Hz**: 241,50 MHz; H 2560/48/32/80 (total 2720); V 1440/3/5/33 (total 1481); 88,79 kHz; 59,95 Hz; H+ V−. Vem junto um **plano B de 50 Hz**, com os mesmos totais e 201,42 MHz (`EdidOverrideBuilder.AtRefresh`). **Confirmado:** são exatamente os DTDs que estão no EDID que funciona no MN801. O gerador reproduz esse EDID byte a byte (teste `Generator_reproduces_the_working_edid_byte_for_byte`).
+- **Timing padrão: CVT-RB 2560×1440 @ 60 Hz**: 241,50 MHz; H 2560/48/32/80 (total 2720); V 1440/3/5/33 (total 1481); 88,79 kHz; 59,95 Hz; H+ V−. Vem junto um **plano B de 50 Hz**, com os mesmos totais e 201,42 MHz (`EdidOverrideBuilder.AtRefresh`). Taxa escolhível de 24 a 120 Hz; acima de 76 Hz o diagnóstico mostra "Taxa alta". Plano B (`EdidOverrideBuilder.PlanB`): alvo > 60 Hz → também grava o CVT-RB 60 Hz; alvo de 60 Hz → o mesmo timing a 50 Hz. **Confirmado:** são exatamente os DTDs que estão no EDID que funciona no MN801. O gerador reproduz esse EDID byte a byte (teste `Generator_reproduces_the_working_edid_byte_for_byte`).
 - **Override:** fica em `HKLM\SYSTEM\CurrentControlSet\Enum\DISPLAY\<HWID>\<InstanceID>\Device Parameters\EDID_OVERRIDE`, com um REG_BINARY de 128 bytes por bloco, nomeados `"0"`, `"1"`… **[confirmar]** com o `.reg` exportado.
 - O **InstanceID muda por máquina, GPU e porta**. Essa é a causa mais provável de o script não ter funcionado no colega. O app obtém o InstanceID do monitor **ativo** via `QueryDisplayConfig` → `DISPLAYCONFIG_TARGET_DEVICE_NAME.monitorDevicePath` e usa a grafia exata da subchave do registro.
 - **Como o EDID é montado** (`EdidOverrideBuilder`): parte de uma cópia fiel do original. O timing preferido (DTD #1) **não** é alterado. O novo DTD entra num destes lugares, nesta ordem:
@@ -80,7 +80,7 @@ Build: `dotnet build UpRes.sln` · testes: `dotnet test` · publicar: `dotnet bu
 
 ## Estado atual
 - [x] Override 1440p funcionando na máquina do Daniel (aplicado manualmente antes do bloqueio).
-- [x] Solução criada: Core + App WinForms net48 + testes (38 passando, incluindo o EDID real).
+- [x] Solução criada: Core + App WinForms net48 + testes (41 passando, incluindo o EDID real).
 - [x] Daniel compilou e rodou o app na máquina dele. O SentinelOne não bloqueou. O relatório foi recebido.
 - [x] Monitor identificado: Multilaser MN801 (`MUL2380`), adicionado em `KnownModels`. O timing foi confirmado e o gerador reproduz o EDID que funciona.
 - [x] Override com 60 Hz + plano B de 50 Hz. Varredura de overrides em todas as instâncias. Comparação registro × WMI.

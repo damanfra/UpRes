@@ -21,8 +21,8 @@ internal sealed class MainForm : Form
     private const int TargetHeight = 1440;
 
     private readonly ComboBox _monitors = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 460 };
-    private readonly NumericUpDown _refresh = new NumericUpDown { Minimum = 24, Maximum = 75, Value = 60, Width = 60 };
-    private readonly CheckBox _planB = new CheckBox { Text = "Incluir 50 Hz (plano B)", AutoSize = true, Checked = true };
+    private readonly NumericUpDown _refresh = new NumericUpDown { Minimum = 24, Maximum = 120, Value = 60, Width = 60 };
+    private readonly CheckBox _planB = new CheckBox { Text = "Incluir plano B (60 Hz, ou 50 Hz se a taxa for 60)", AutoSize = true, Checked = true };
     private readonly CheckBox _force = new CheckBox { Text = "Gerar mesmo se improvável", AutoSize = true };
     private readonly Label _timing = new Label { AutoSize = true, Padding = new Padding(0, 6, 0, 0) };
     private readonly Label _verdict = new Label { AutoSize = true, Font = new Font("Segoe UI", 16F, FontStyle.Bold) };
@@ -150,10 +150,8 @@ internal sealed class MainForm : Form
 
         try
         {
-            // Plano B: mesmo timing com pixel clock para 50 Hz (formato que funcionou no MN801).
-            var extras = _planB.Checked && _refresh.Value > 50
-                ? new[] { EdidOverrideBuilder.AtRefresh(target, 50) }
-                : null;
+            var planB = _planB.Checked ? EdidOverrideBuilder.PlanB(target) : null;
+            var extras = planB != null ? new[] { planB } : null;
             _eval = Evaluator.Evaluate(_ctx, target, extras);
         }
         catch (Exception ex)

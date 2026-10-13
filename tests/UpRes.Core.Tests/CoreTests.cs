@@ -343,3 +343,35 @@ public class BuildInfoTests
         Assert.Contains(BuildInfo.Version, RegFileGenerator.Apply(ctx, ev.Override!));
     }
 }
+
+public class HighRefreshTests
+{
+    [Theory]
+    [InlineData(90)]
+    [InlineData(120)]
+    public void High_refresh_with_plan_b_60_builds_on_gaming_monitor(int hz)
+    {
+        var target = CvtReducedBlanking.Compute(2560, 1440, hz);
+        var planB = EdidOverrideBuilder.PlanB(target)!;
+        Assert.Equal(241500, planB.PixelClockKHz); // plano B = CVT-RB 60 Hz comprovado
+
+        var r = EdidOverrideBuilder.Build(EdidFactory.Gaming240(), new[] { target, planB });
+        Assert.True(r.Success, r.Error);
+        Assert.Equal(2, r.Timings.Count);
+        var e = EdidParser.Parse(r.Edid);
+        Assert.Empty(e.BadChecksumBlocks);
+        Assert.Contains(e.Modes, m => m.Width == 2560 && m.Height == 1440 && System.Math.Abs(m.RefreshHz - hz) < 1);
+
+        var ctx = new MonitorContext { FriendlyName = "X", HardwareId = "GSM5BBF", InstanceId = "1&2&0&UID1", Edid = EdidFactory.Gaming240(), Connection = ConnectionKind.DisplayPort, Gpu = GpuVendor.Amd };
+        var ev = Evaluator.Evaluate(ctx, target, new[] { planB });
+        Assert.Equal(Verdict.Provavel, ev.Verdict);
+        Assert.Contains(ev.Checks, c => c.Title == "Taxa alta");
+    }
+
+    [Fact]
+    public void Plan_b_choice()
+    {
+        Assert.Equal(201420, EdidOverrideBuilder.PlanB(CvtReducedBlanking.Compute(2560, 1440, 60))!.PixelClockKHz);
+        Assert.Null(EdidOverrideBuilder.PlanB(CvtReducedBlanking.Compute(2560, 1440, 50)));
+    }
+}

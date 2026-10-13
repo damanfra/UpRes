@@ -317,6 +317,13 @@ public static class Evaluator
             ev.Checks.Add(new Check("Link DisplayPort", CheckStatus.Info, "Em DisplayPort a banda do link raramente limita 241,5 MHz (HBR2 x4 ≈ 540 MHz a 24 bpp)."));
         }
 
+        // Taxa alta: o scaler costuma ser o limite (mesmo com banda de entrada sobrando).
+        if (target.RefreshHz > 76)
+            ev.Checks.Add(new Check("Taxa alta", CheckStatus.Atencao, F(
+                "{0}x{1} a {2:0.##} Hz exige {3:0.00} MHz / {4:0.00} kHz: precisa de DisplayPort ou HDMI 2.0 e de um scaler que aceite 2560 px nessa frequência. " +
+                "A chance de 'Out of range' é maior que a 60 Hz; mantenha o plano B a 60 Hz.",
+                tw, th, target.RefreshHz, target.PixelClockMHz, target.HFreqKHz)));
+
         // Montagem do override
         var all = new List<DetailedTiming> { target };
         if (extraTimings != null) all.AddRange(extraTimings);

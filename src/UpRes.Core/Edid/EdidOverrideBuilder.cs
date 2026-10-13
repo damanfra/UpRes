@@ -123,6 +123,19 @@ public static class EdidOverrideBuilder
     }
 
     /// <summary>
+    /// Timing de reserva gravado junto com o principal:
+    /// acima de 60 Hz → o próprio CVT-RB a 60 Hz (o modo comprovado);
+    /// de 51 a 60 Hz → mesmo timing a 50 Hz (formato que funcionou no MN801);
+    /// 50 Hz ou menos → nenhum.
+    /// </summary>
+    public static DetailedTiming? PlanB(DetailedTiming target)
+    {
+        if (target.RefreshHz > 61) return CvtReducedBlanking.Compute(target.HActive, target.DisplayHeight, 60);
+        if (target.RefreshHz > 50.5) return AtRefresh(target, 50);
+        return null;
+    }
+
+    /// <summary>
     /// Mesmo timing (mesmos porches e totais) com o pixel clock reduzido para outra taxa.
     /// É a forma do "plano B" de 50 Hz que funcionou no MN801: 2720x1481 a 201,42 MHz.
     /// </summary>
