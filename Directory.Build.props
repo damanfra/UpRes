@@ -1,0 +1,10 @@
+<Project>
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <Company>UpRes</Company>
+    <Product>UpRes - Verificador 1440p (somente leitura)</Product>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+</Project>

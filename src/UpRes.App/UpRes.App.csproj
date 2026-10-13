@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    .NET Framework 4.8: já vem instalado em todo Windows 10/11, então o .exe roda
+    na máquina do colega sem instalar runtime nenhum.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <!-- Permite compilar fora do Windows (CI/Linux); no Windows não muda nada. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>UpRes</AssemblyName>
+    <RootNamespace>UpRes.App</RootNamespace>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Management" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Dispensa o "Targeting Pack" do 4.8 instalado no VS; só usado em build. -->
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\UpRes.Core\UpRes.Core.csproj" />
+  </ItemGroup>
+
+</Project>
