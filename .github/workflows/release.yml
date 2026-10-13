@@ -1,0 +1,83 @@
+name: Build e Release
+
+# push na main → testa, compila e publica um Release (vX.Y.Z.<run_number>) com o zip do app.
+# pull_request → só testa e compila.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # git describe precisa do histórico
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Testes
+        run: dotnet test tests/UpRes.Core.Tests -c Release
+
+      - name: Versão
+        id: ver
+        shell: pwsh
+        run: |
+          $v = (dotnet msbuild src/UpRes.Core/UpRes.Core.csproj -getProperty:Version).Trim()
+          "version=$v" >> $env:GITHUB_OUTPUT
+          "tag=v$v.${{ github.run_number }}" >> $env:GITHUB_OUTPUT
+
+      - name: Build (Release, .NET Framework 4.8)
+        run: dotnet build src/UpRes.App/UpRes.App.csproj -c Release -p:BuildNumber=${{ github.run_number }}
+
+      - name: Empacotar
+        id: pkg
+        shell: pwsh
+        run: |
+          $out = "src/UpRes.App/bin/Release/net48"
+          $zip = "UpRes-${{ steps.ver.outputs.tag }}.zip"
+          New-Item -ItemType Directory pkg | Out-Null
+          Get-ChildItem $out -File | Where-Object { $_.Extension -in '.exe', '.dll', '.config' } | Copy-Item -Destination pkg
+          Copy-Item README.md pkg
+          Compress-Archive -Path pkg/* -DestinationPath $zip
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash
+          "zip=$zip" >> $env:GITHUB_OUTPUT
+          "sha256=$hash" >> $env:GITHUB_OUTPUT
+          Get-ChildItem pkg | Format-Table Name, Length
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.pkg.outputs.zip }}
+          path: ${{ steps.pkg.outputs.zip }}
+
+      - name: Publicar Release
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $notes = @"
+          Build automático da main.
+
+          - Versão: ``${{ steps.ver.outputs.tag }}``
+          - Commit: ${{ github.sha }}
+          - SHA-256 do zip: ``${{ steps.pkg.outputs.sha256 }}``
+
+          Descompacte e rode ``UpRes.exe`` (mantenha ``UpRes.Core.dll`` na mesma pasta). Requer .NET Framework 4.8 (já incluso no Windows 10/11).
+          O executável não é assinado: em máquina corporativa pode ser necessário pedir liberação ao TI.
+          "@
+          gh release create "${{ steps.ver.outputs.tag }}" "${{ steps.pkg.outputs.zip }}" `
+            --target "${{ github.sha }}" `
+            --title "UpRes ${{ steps.ver.outputs.tag }}" `
+            --notes $notes

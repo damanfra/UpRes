@@ -8,6 +8,9 @@ O app **não** grava no registro, **não** executa comandos e **não** pede elev
 - Windows 10/11 com .NET Framework 4.8, que já vem instalado.
 - Para compilar: Visual Studio 2022/2026 ou o .NET SDK 8+.
 
+## Baixar
+Versões prontas em [Releases](https://github.com/damanfra/UpRes/releases): cada atualização da `main` publica um zip. No app, o botão **Checar atualizações** compara a sua versão com a última publicada. Ele não baixa nem instala nada; só mostra o link.
+
 ## Compilar
 ```
 dotnet build UpRes.sln -c Release

@@ -1,8 +1,9 @@
 <Project>
 
   <!--
-    Versão rastreável: InformationalVersion = <Version>+<git describe>, ex. 0.2.0+b160276 ou 0.2.0+b160276-dirty
-    (dirty = compilado com alterações locais não commitadas). Sem git disponível: 0.2.0+sem-git.
+    Versão rastreável: InformationalVersion = <Version>.<BuildNumber>+<git describe>,
+    ex. 0.3.0.0+b160276 (build local), 0.3.0.12+b160276 (release nº 12 da Action) ou 0.3.0.0+b160276-dirty
+    (dirty = compilado com alterações locais não commitadas). Sem git disponível: 0.3.0.0+sem-git.
     Só roda no BUILD (máquina de quem compila); o app em si nunca executa nada.
   -->
   <PropertyGroup>
@@ -18,7 +19,7 @@
     </Exec>
     <PropertyGroup>
       <UpResGitDescribe Condition="'$(UpResGitExit)' != '0' or '$(UpResGitDescribe)' == ''">sem-git</UpResGitDescribe>
-      <InformationalVersion>$(Version)+$(UpResGitDescribe)</InformationalVersion>
+      <InformationalVersion>$(Version).$(BuildNumber)+$(UpResGitDescribe)</InformationalVersion>
     </PropertyGroup>
     <ItemGroup>
       <AssemblyMetadata Include="BuildDate" Value="$([System.DateTime]::Now.ToString('yyyy-MM-dd HH:mm'))" />

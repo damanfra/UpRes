@@ -5,6 +5,9 @@
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <Company>UpRes</Company>
     <Product>UpRes - Verificador 1440p (somente leitura)</Product>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
+    <!-- Número do build: 0 em builds locais; a Action de release passa o github.run_number. -->
+    <BuildNumber Condition="'$(BuildNumber)' == ''">0</BuildNumber>
+    <FileVersion>$(Version).$(BuildNumber)</FileVersion>
   </PropertyGroup>
 </Project>

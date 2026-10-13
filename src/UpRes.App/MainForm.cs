@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Windows.Forms;
+using UpRes.Core;
 using UpRes.Core.Analysis;
 using UpRes.Core.Edid;
 using UpRes.Core.Output;
@@ -54,6 +55,8 @@ internal sealed class MainForm : Form
         refreshButton.Click += (s, e) => LoadMonitors();
         var reportButton = new Button { Text = "Copiar relatório", AutoSize = true };
         reportButton.Click += (s, e) => CopyReport();
+        var updateButton = new Button { Text = "Checar atualizações", AutoSize = true };
+        updateButton.Click += async (s, e) => await CheckUpdatesAsync(updateButton);
 
         var top = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = true, Padding = new Padding(8, 8, 8, 0) };
         top.Controls.Add(new Label { Text = "Monitor ativo:", AutoSize = true, Padding = new Padding(0, 6, 0, 0) });
@@ -65,6 +68,7 @@ internal sealed class MainForm : Form
         top.Controls.Add(_planB);
         top.Controls.Add(_force);
         top.Controls.Add(reportButton);
+        top.Controls.Add(updateButton);
 
         var verdictPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(8, 4, 8, 4) };
         verdictPanel.Controls.Add(_verdict);
@@ -224,6 +228,40 @@ internal sealed class MainForm : Form
     {
         if (_ctx == null || _eval == null) return;
         CopyText(Crlf(ReportBuilder.Build(_ctx, _eval, includeHex: true)));
+    }
+
+    /// <summary>Só consulta e informa. Abrir a página do Release (navegador) acontece apenas se o usuário escolher.</summary>
+    private async System.Threading.Tasks.Task CheckUpdatesAsync(Button button)
+    {
+        button.Enabled = false;
+        string old = button.Text;
+        button.Text = "Consultando…";
+        UpdateResult result;
+        try { result = await UpdateClient.CheckAsync(); }
+        finally { button.Text = old; button.Enabled = true; }
+
+        string url = result.Release?.HtmlUrl is { Length: > 0 } u ? u : UpdateCheck.ReleasesPage;
+        if (result.Status != UpdateStatus.UpdateAvailable)
+        {
+            MessageBox.Show(this, result.Message + "\n\nVersão deste programa: " + BuildInfo.Display, "Checar atualizações",
+                MessageBoxButtons.OK, result.Status == UpdateStatus.Unknown ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
+            return;
+        }
+
+        var choice = MessageBox.Show(this,
+            result.Message + "\n\n" + url +
+            "\n\nSim: abrir a página no navegador.\nNão: copiar o link.\n\n" +
+            "O programa não baixa nem instala nada. Em máquina corporativa, um .exe novo sem assinatura pode exigir liberação do TI.",
+            "Atualização disponível", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Information);
+        if (choice == DialogResult.Yes)
+        {
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); }
+            catch (Exception ex) { CopyText(url); MessageBox.Show(this, "Não foi possível abrir o navegador (" + ex.Message + "). O link foi copiado.", Text); }
+        }
+        else if (choice == DialogResult.No)
+        {
+            CopyText(url);
+        }
     }
 
     private TabPage TextTab(string title, TextBox box, Func<string>? saveName)

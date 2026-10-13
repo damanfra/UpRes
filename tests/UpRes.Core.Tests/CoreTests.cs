@@ -333,7 +333,7 @@ public class BuildInfoTests
     [Fact]
     public void Version_carries_build_identity_and_shows_in_outputs()
     {
-        Assert.Matches(@"^\d+\.\d+\.\d+\+(sem-git|[0-9a-f]{7,}(-dirty)?)$", BuildInfo.Version);
+        Assert.Matches(@"^\d+\.\d+\.\d+\.\d+\+(sem-git|[0-9a-f]{7,}(-dirty)?)$", BuildInfo.Version);
         Assert.NotEqual("?", BuildInfo.BuildDate);
 
         var edid = EdidFactory.Gaming240();

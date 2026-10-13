@@ -26,7 +26,11 @@ src/UpRes.Core     netstandard2.0, sem Windows: parser EDID, CVT-RB, override, a
 src/UpRes.App      net48 WinForms: QueryDisplayConfig/EnumDisplaySettings (P/Invoke), registro/WMI só leitura, UI
 tests/UpRes.Core.Tests  xUnit (net10.0): fixtures sintéticas em EdidFactory; EDIDs reais irão para Fixtures/
 ```
-**Versão:** `Directory.Build.targets` grava `<Version>+<git describe --dirty>` (ex.: `0.2.0+b160276`) na InformationalVersion. Ela aparece no cabeçalho do relatório ("Versão: …"), no título da janela e nos comentários dos `.reg`/PowerShell. **Sempre confira a versão de um relatório recebido antes de interpretá-lo.** `-dirty` = compilado com alterações locais; `sem-git` = compilado fora de um clone git.
+**Versão:** `Directory.Build.targets` grava `<Version>.<BuildNumber>+<git describe --dirty>` (ex.: `0.3.0.0+b160276` em build local, `0.3.0.12+b160276` no Release nº 12 da Action) na InformationalVersion. Ela aparece no cabeçalho do relatório ("Versão: …"), no título da janela e nos comentários dos `.reg`/PowerShell. **Sempre confira a versão de um relatório recebido antes de interpretá-lo.** `-dirty` = compilado com alterações locais; `sem-git` = compilado fora de um clone git.
+
+**Releases:** `.github/workflows/release.yml`. Cada push na `main` roda os testes, compila em `windows-latest` com `-p:BuildNumber=<run_number>` e publica o Release `v<Version>.<run_number>` com o zip (`UpRes.exe`, `.config`, `UpRes.Core.dll`, README). Em PRs, só testa e compila. Ao mudar funcionalidade, suba o `<Version>` em `Directory.Build.props`.
+**Checar atualizações:** botão no app (`UpdateCheck` no Core, `UpdateClient` no App). Só roda quando o usuário clica e consulta `api.github.com/repos/damanfra/UpRes/releases/latest`, sem autenticação (o repo é público). Compara commit e versão. **Nunca baixa nem instala**; no máximo abre a página do Release no navegador, se o usuário escolher.
+**Autor dos commits:** Daniel Manfrini <daniel.manfrini@gmail.com> (configurado no repo local).
 
 Build: `dotnet build UpRes.sln` · testes: `dotnet test` · publicar: `dotnet build src/UpRes.App -c Release` (saída em `src/UpRes.App/bin/Release/net48/`).
 
@@ -80,7 +84,7 @@ Build: `dotnet build UpRes.sln` · testes: `dotnet test` · publicar: `dotnet bu
 
 ## Estado atual
 - [x] Override 1440p funcionando na máquina do Daniel (aplicado manualmente antes do bloqueio).
-- [x] Solução criada: Core + App WinForms net48 + testes (41 passando, incluindo o EDID real).
+- [x] Solução criada: Core + App WinForms net48 + testes (53 passando, incluindo o EDID real).
 - [x] Daniel compilou e rodou o app na máquina dele. O SentinelOne não bloqueou. O relatório foi recebido.
 - [x] Monitor identificado: Multilaser MN801 (`MUL2380`), adicionado em `KnownModels`. O timing foi confirmado e o gerador reproduz o EDID que funciona.
 - [x] Override com 60 Hz + plano B de 50 Hz. Varredura de overrides em todas as instâncias. Comparação registro × WMI.
@@ -90,4 +94,6 @@ Build: `dotnet build UpRes.sln` · testes: `dotnet test` · publicar: `dotnet bu
 - [x] **Reinício confirmado** (build `b7cc87f`, 15:33): 2560×1440 continua em uso, com o `EDID_OVERRIDE` na instância ativa. A máquina do Daniel está resolvida. O nome GDI mudou de `DISPLAY7` para `DISPLAY2` (normal); o InstanceID não mudou.
 - [x] Versão nova rodada no Daniel: nenhum `EDID_OVERRIDE` em outra instância; EDID do WMI igual ao do registro.
 - [x] **Colega também resolvido** (informado pelo Daniel): o 1440p foi aplicado no monitor dele. Objetivo do projeto atingido.
+- [x] Botão "Checar atualizações" + Action de build/release na `main`; merge para a `main`.
+- [ ] Trocar o branch padrão do repositório para `main` (Settings > General > Default branch).
 - [ ] Opcional: obter o relatório da máquina do colega para guardar o EDID de fábrica real do MN801 como fixture (hoje ele é inferido) e registrar o InstanceID e a GPU dele em `KnownModels`.
