@@ -95,5 +95,5 @@ Build: `dotnet build UpRes.sln` · testes: `dotnet test` · publicar: `dotnet bu
 - [x] Versão nova rodada no Daniel: nenhum `EDID_OVERRIDE` em outra instância; EDID do WMI igual ao do registro.
 - [x] **Colega também resolvido** (informado pelo Daniel): o 1440p foi aplicado no monitor dele. Objetivo do projeto atingido.
 - [x] Botão "Checar atualizações" + Action de build/release na `main`; merge para a `main`.
-- [ ] Trocar o branch padrão do repositório para `main` (Settings > General > Default branch).
+- [x] Branch padrão do repositório = `main`. Primeiro Release publicado pela Action: `v0.3.0.1`.
 - [ ] Opcional: obter o relatório da máquina do colega para guardar o EDID de fábrica real do MN801 como fixture (hoje ele é inferido) e registrar o InstanceID e a GPU dele em `KnownModels`.
