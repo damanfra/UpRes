@@ -2,10 +2,14 @@ name: Build e Release
 
 # push na main → testa, compila e publica um Release (vX.Y.Z.<run_number>) com o zip do app.
 # pull_request → só testa e compila.
+# Pushes/PRs que só mudam arquivos .md (documentação) não disparam nada.
+# Para publicar mesmo assim: Actions > Build e Release > Run workflow.
 on:
   push:
     branches: [main]
+    paths-ignore: ['**.md']
   pull_request:
+    paths-ignore: ['**.md']
   workflow_dispatch:
 
 permissions:
