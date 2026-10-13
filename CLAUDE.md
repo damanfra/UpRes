@@ -85,6 +85,8 @@ Build: `dotnet build UpRes.sln` · testes: `dotnet test` · publicar: `dotnet bu
 - [x] Monitor identificado: Multilaser MN801 (`MUL2380`), adicionado em `KnownModels`. O timing foi confirmado e o gerador reproduz o EDID que funciona.
 - [x] Override com 60 Hz + plano B de 50 Hz. Varredura de overrides em todas as instâncias. Comparação registro × WMI.
 - [x] Opção de tornar permanente o EDID atual quando falta o override (aba "Aplicar").
-- [ ] Daniel salva o "Aplicar" e o "Desfazer" **antes de reiniciar** e importa manualmente, se o TI concordar.
+- [x] Daniel importou o "Aplicar" (build `863058b`, 15:26): `EDID_OVERRIDE` presente na instância ativa, idêntico ao EDID que funciona.
+- [x] Diagnóstico pós-aplicação limpo: sem FALHA de override, sem evidência circular em "Acima da nativa", "Fonte do EDID" como INFO.
+- [ ] **Reiniciar** e confirmar que 2560×1440 continua oferecido (prova de que o override sustenta o modo).
 - [ ] Daniel roda a versão nova: ver se aparece algum `EDID_OVERRIDE` em outra instância e se o EDID do WMI difere do registro.
 - [ ] Validar na máquina do colega: gerar lá e aplicar manualmente o `.reg` com o InstanceID dele.

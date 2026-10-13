@@ -150,8 +150,9 @@ public static class Evaluator
         ev.Edid = edid;
 
         if (ev.ExistingOverride != null && ctx.ExistingOverride != null && ctx.Edid.SequenceEqual(ctx.ExistingOverride))
-            ev.Checks.Add(new Check("Fonte do EDID", CheckStatus.Atencao,
-                "O EDID lido é idêntico ao override existente; o original pode estar mascarado. Se possível, rode o app numa máquina sem override."));
+            ev.Checks.Add(new Check("Fonte do EDID", CheckStatus.Info,
+                "O EDID lido é idêntico ao override existente: esperado com o override ativo. O EDID de fábrica fica mascarado; " +
+                "para vê-lo, rode o app numa máquina sem override."));
 
         if (ctx.WmiEdid != null && ctx.EdidSource.StartsWith("registro", StringComparison.Ordinal))
         {
@@ -196,7 +197,7 @@ public static class Evaluator
         // 1440p já no EDID?
         if (inEdid.Count > 0)
             ev.Checks.Add(new Check($"{tLabel} no EDID", offered.Count > 0 ? CheckStatus.Ok : CheckStatus.Atencao,
-                $"O próprio EDID do monitor já anuncia {tLabel} ({string.Join("; ", inEdid.Select(m => m.ToString()))})." +
+                $"O EDID em uso já anuncia {tLabel} ({string.Join("; ", inEdid.Select(m => m.ToString()))})." +
                 (offered.Count > 0 ? "" : " Mas o Windows não oferece: o limite provavelmente é a GPU, a porta ou o cabo, e não o monitor.")));
         else
             ev.Checks.Add(new Check($"{tLabel} no EDID", CheckStatus.Info,
@@ -206,7 +207,8 @@ public static class Evaluator
         bool aboveNative = false;
         if (native != null)
         {
-            var bigger = edid.Modes.Where(m => m.Width > native.HActive || m.Height > native.DisplayHeight).ToList();
+            // Exclui a própria resolução avaliada: se ela já está no EDID (override/cache), seria evidência circular.
+            var bigger = edid.Modes.Where(m => (m.Width > native.HActive || m.Height > native.DisplayHeight) && !(m.Width == tw && m.Height == th)).ToList();
             aboveNative = bigger.Count > 0;
             if (aboveNative)
                 ev.Checks.Add(new Check("Acima da nativa", CheckStatus.Ok,
@@ -367,13 +369,23 @@ public static class Evaluator
                 ev.Checks.Add(new Check("Override", CheckStatus.Ok,
                     "Override proposto = cópia exata do EDID em uso (nenhum byte alterado), com " + keep.Blocks.Count + " bloco(s)."));
                 ev.Checks.Add(new Check("Persistência", CheckStatus.Atencao,
-                    "Não há EDID_OVERRIDE nesta instância. Se o 1440p foi obtido hoje por script/override que depois foi removido " +
-                    "(ex.: remediação do antivírus), ele pode SUMIR no próximo reinício ou reconexão do monitor. " +
+                    (known?.FactoryEdidHas1440p == false
+                        ? $"Não há EDID_OVERRIDE nesta instância e o EDID de fábrica do {known.Name} não traz {tLabel}: o modo vem de um EDID modificado em cache e vai SUMIR no próximo reinício ou reconexão. "
+                        : "Não há EDID_OVERRIDE nesta instância. Se o modo foi obtido por script/override que depois foi removido " +
+                          "(ex.: remediação do antivírus), ele pode SUMIR no próximo reinício ou reconexão do monitor. ") +
                     "A aba 'Aplicar' grava o EDID atual como override para torná-lo permanente. Salve-a ANTES de reiniciar."));
                 source = known?.FactoryEdidHas1440p == false
                     ? $"O EDID de fábrica do {known.Name} NÃO traz {tLabel}: o EDID em uso é uma versão modificada guardada em cache, " +
                       "sem EDID_OVERRIDE que a sustente. O modo deve SUMIR no próximo reinício ou reconexão do monitor. Salve e aplique a aba 'Aplicar' antes disso."
                     : source + " Atenção: sem override, o modo pode não sobreviver a um reinício; veja a aba 'Aplicar'.";
+            }
+            if (inOverride)
+            {
+                ev.Override = null;
+                ev.Checks.RemoveAll(c => c.Title == "Override");
+                ev.Checks.Add(new Check("Override", CheckStatus.Ok,
+                    $"O EDID_OVERRIDE desta instância já contém {tLabel}: nada a aplicar. A aba 'Override atual' tem o backup; a aba 'Desfazer' o remove."));
+                source += " Nada a aplicar; confirme que o modo continua disponível depois de reiniciar.";
             }
             return Finish(ev, Verdict.JaDisponivel, $"{tLabel} já está disponível em Configurações > Tela. {source}");
         }

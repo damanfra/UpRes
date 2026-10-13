@@ -136,3 +136,30 @@ public class PersistTests
         Assert.Contains(@"DISPLAY\MUL2380\4&12ecdce7&0&UID4145\Device Parameters\EDID_OVERRIDE]", reg);
     }
 }
+
+public class OverrideAppliedTests
+{
+    [Fact]
+    public void After_applying_the_override_nothing_fails_and_nothing_to_apply()
+    {
+        var working = RealEdidTests.LoadHex("MUL2380_MN801_registro.hex");
+        var ctx = new MonitorContext
+        {
+            FriendlyName = "MN801", HardwareId = "MUL2380", InstanceId = "4&12ecdce7&0&UID4145", RegistryKeyFound = true,
+            Connection = ConnectionKind.Hdmi, Gpu = GpuVendor.Intel, Edid = working, EdidSource = "registro (Device Parameters\\EDID)",
+            ExistingOverride = working,
+        };
+        ctx.WindowsModes.Add(new WindowsMode(2560, 1440, 60));
+        ctx.OtherOverrides.Add(new FoundOverride("MUL2380", "4&12ecdce7&0&UID4145", working, isActiveInstance: true));
+        var ev = Evaluator.Evaluate(ctx, CvtReducedBlanking.Compute(2560, 1440, 60));
+
+        Assert.Equal(Verdict.JaDisponivel, ev.Verdict);
+        Assert.Contains("override existente", ev.Summary, System.StringComparison.OrdinalIgnoreCase);
+        Assert.False(ev.PersistCurrent);
+        Assert.Null(ev.Override);
+        Assert.DoesNotContain(ev.Checks, c => c.Status == CheckStatus.Falha);
+        Assert.DoesNotContain(ev.Checks, c => c.Title == "Persistência");
+        Assert.DoesNotContain(ev.Checks, c => c.Title == "Acima da nativa");
+        Assert.Contains(ev.Checks, c => c.Title == "Fonte do EDID" && c.Status == CheckStatus.Info);
+    }
+}
