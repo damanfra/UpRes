@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
@@ -15,7 +16,7 @@ public static class PowerShellGenerator
         if (ov == null || !ov.Success) throw new InvalidOperationException("Override inválido.");
         var sb = new StringBuilder();
         sb.AppendLine("# Executar MANUALMENTE em um PowerShell como administrador. O UpRes nunca executa este texto.");
-        sb.AppendLine($"# Adiciona {ov.Timing} ao EDID de {ctx.FriendlyName} ({ctx.HardwareId}) nesta máquina ({Environment.MachineName}).");
+        sb.AppendLine($"# Adiciona {string.Join(" e ", ov.Timings)} ao EDID de {ctx.FriendlyName} ({ctx.HardwareId}) nesta máquina ({Environment.MachineName}).");
         sb.AppendLine($"$key = '{PsPath(ctx)}'");
         sb.AppendLine("if (Test-Path $key) { Remove-Item -Path $key -Recurse -Force }");
         sb.AppendLine("New-Item -Path $key -Force | Out-Null");
@@ -120,6 +121,10 @@ public static class ReportBuilder
             sb.AppendLine($"                    {e.BlockCount} bloco(s), fonte: {ctx.EdidSource}");
         }
         foreach (var n in ctx.Notes) sb.AppendLine("  Nota: " + n);
+        if (ctx.OtherOverrides.Count == 0)
+            sb.AppendLine("  EDID_OVERRIDE na máquina: nenhum em Enum\\DISPLAY.");
+        foreach (var o in ctx.OtherOverrides)
+            sb.AppendLine("  EDID_OVERRIDE na máquina: " + o);
         sb.AppendLine();
 
         sb.AppendLine("DIAGNÓSTICO");
@@ -128,7 +133,9 @@ public static class ReportBuilder
         sb.AppendLine();
 
         sb.AppendLine("TIMING PROPOSTO");
-        sb.AppendLine("  " + (ev.Override?.Timing ?? ev.Target).Describe().Replace("\n", "\n  "));
+        var proposed = ev.Override?.Timings.Count > 0 ? ev.Override.Timings : new List<DetailedTiming> { ev.Target };
+        foreach (var t in proposed)
+            sb.AppendLine("  " + t.Describe().Replace("\n", "\n  "));
         sb.AppendLine();
 
         if (e != null)
@@ -162,6 +169,8 @@ public static class ReportBuilder
         if (includeHex)
         {
             if (ctx.Edid != null) { sb.AppendLine("EDID ORIGINAL (hex)"); sb.Append(EdidParser.HexDump(ctx.Edid)); sb.AppendLine(); }
+            if (ctx.WmiEdid != null && (ctx.Edid == null || !ctx.WmiEdid.SequenceEqual(ctx.Edid))) { sb.AppendLine("EDID VIA WMI (hex) — difere do registro"); sb.Append(EdidParser.HexDump(ctx.WmiEdid)); sb.AppendLine(); }
+            foreach (var o in ctx.OtherOverrides.Where(o => !o.IsActiveInstance)) { sb.AppendLine($"EDID_OVERRIDE {o} (hex)"); sb.Append(EdidParser.HexDump(o.Data)); sb.AppendLine(); }
             if (ctx.ExistingOverride != null) { sb.AppendLine("EDID_OVERRIDE EXISTENTE (hex)"); sb.Append(EdidParser.HexDump(ctx.ExistingOverride)); sb.AppendLine(); }
             if (ev.Override?.Success == true) { sb.AppendLine("EDID PROPOSTO (hex)"); sb.Append(EdidParser.HexDump(ev.Override.Edid)); sb.AppendLine(); }
         }

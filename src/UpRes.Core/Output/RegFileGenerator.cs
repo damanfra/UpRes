@@ -43,16 +43,21 @@ public static class RegFileGenerator
     }
 
     /// <summary>Backup do override que já existe na máquina (para restaurar depois, se preciso).</summary>
-    public static string Backup(MonitorContext ctx, byte[] existingOverride)
+    public static string Backup(MonitorContext ctx, byte[] existingOverride) =>
+        Backup(ctx.OverrideKeyPath, existingOverride, Name(ctx));
+
+    public static string Backup(FoundOverride found) =>
+        Backup(found.KeyPath, found.Data, $@"{found.HardwareId}\{found.InstanceId}" + (found.IsActiveInstance ? "" : " (instância INATIVA: este override não afeta nenhum monitor conectado agora)"));
+
+    private static string Backup(string keyPath, byte[] data, string label)
     {
-        var blocks = Split(existingOverride);
         var sb = new StringBuilder();
         sb.Append(Header).Append(NL).Append(NL);
         AppendComments(sb,
-            $"Backup do EDID_OVERRIDE existente de {Name(ctx)}, lido em {DateTime.Now:yyyy-MM-dd HH:mm}.\n" +
-            $"Máquina: {Environment.MachineName}. Importar este arquivo restaura exatamente o override atual.");
-        sb.Append("[-").Append(ctx.OverrideKeyPath).Append(']').Append(NL).Append(NL);
-        AppendKeyWithBlocks(sb, ctx.OverrideKeyPath, blocks);
+            $"Backup do EDID_OVERRIDE existente de {label}, lido em {DateTime.Now:yyyy-MM-dd HH:mm}.\n" +
+            $"Máquina: {Environment.MachineName}. Importar este arquivo restaura exatamente este override.");
+        sb.Append("[-").Append(keyPath).Append(']').Append(NL).Append(NL);
+        AppendKeyWithBlocks(sb, keyPath, Split(data));
         return sb.ToString();
     }
 
@@ -117,7 +122,7 @@ public static class RegFileGenerator
     }
 
     private static string DefaultApplyComment(MonitorContext ctx, OverrideResult ov) =>
-        $"Adiciona {ov.Timing} ao EDID de {Name(ctx)} via EDID override.\n" +
+        $"Adiciona {string.Join(" e ", ov.Timings)} ao EDID de {Name(ctx)} via EDID override.\n" +
         $"Máquina: {Environment.MachineName}  |  HardwareID: {ctx.HardwareId}  |  InstanceID: {ctx.InstanceId}\n" +
         "Gerado pelo UpRes (somente leitura). Válido APENAS para este monitor, nesta máquina, nesta porta.\n" +
         "O timing nativo continua como preferido; escolha a nova resolução em Configurações > Tela.\n" +

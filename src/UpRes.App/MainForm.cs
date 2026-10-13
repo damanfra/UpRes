@@ -22,6 +22,7 @@ internal sealed class MainForm : Form
 
     private readonly ComboBox _monitors = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 460 };
     private readonly NumericUpDown _refresh = new NumericUpDown { Minimum = 24, Maximum = 75, Value = 60, Width = 60 };
+    private readonly CheckBox _planB = new CheckBox { Text = "Incluir 50 Hz (plano B)", AutoSize = true, Checked = true };
     private readonly CheckBox _force = new CheckBox { Text = "Gerar mesmo se improvável", AutoSize = true };
     private readonly Label _timing = new Label { AutoSize = true, Padding = new Padding(0, 6, 0, 0) };
     private readonly Label _verdict = new Label { AutoSize = true, Font = new Font("Segoe UI", 16F, FontStyle.Bold) };
@@ -61,6 +62,7 @@ internal sealed class MainForm : Form
         top.Controls.Add(new Label { Text = "   Taxa desejada (Hz):", AutoSize = true, Padding = new Padding(0, 6, 0, 0) });
         top.Controls.Add(_refresh);
         top.Controls.Add(_timing);
+        top.Controls.Add(_planB);
         top.Controls.Add(_force);
         top.Controls.Add(reportButton);
 
@@ -101,6 +103,7 @@ internal sealed class MainForm : Form
         _monitors.SelectedIndexChanged += (s, e) => Evaluate();
         _refresh.ValueChanged += (s, e) => Evaluate();
         _force.CheckedChanged += (s, e) => Evaluate();
+        _planB.CheckedChanged += (s, e) => Evaluate();
         Shown += (s, e) => LoadMonitors();
     }
 
@@ -147,7 +150,11 @@ internal sealed class MainForm : Form
 
         try
         {
-            _eval = Evaluator.Evaluate(_ctx, target);
+            // Plano B: mesmo timing com pixel clock para 50 Hz (formato que funcionou no MN801).
+            var extras = _planB.Checked && _refresh.Value > 50
+                ? new[] { EdidOverrideBuilder.AtRefresh(target, 50) }
+                : null;
+            _eval = Evaluator.Evaluate(_ctx, target, extras);
         }
         catch (Exception ex)
         {
@@ -189,9 +196,13 @@ internal sealed class MainForm : Form
         // O desfazer vale sempre que houver override (novo ou já existente).
         _undo.Text = _ctx.HardwareId.Length > 0 ? RegFileGenerator.Undo(_ctx) : "; Monitor sem HardwareID/InstanceID.";
 
-        _backup.Text = _ctx.ExistingOverride != null
-            ? RegFileGenerator.Backup(_ctx, _ctx.ExistingOverride)
-            : "; Não existe EDID_OVERRIDE para este monitor nesta máquina.";
+        // Um único .reg: cabeçalho uma vez, depois cada override encontrado.
+        var backups = new List<string>();
+        if (_ctx.ExistingOverride != null) backups.Add(RegFileGenerator.Backup(_ctx, _ctx.ExistingOverride));
+        backups.AddRange(_ctx.OtherOverrides.Where(o => !o.IsActiveInstance).Select(RegFileGenerator.Backup));
+        _backup.Text = backups.Count == 0
+            ? "; Não existe EDID_OVERRIDE nesta máquina (nem para este monitor, nem em outras instâncias)."
+            : Crlf(RegFileGenerator.Header + "\n\n" + string.Join("\n", backups.Select(b => b.Substring(RegFileGenerator.Header.Length).TrimStart('\r', '\n'))));
     }
 
     private string HexText()

@@ -23,8 +23,9 @@ public static class KnownModels
 
     public static readonly IReadOnlyList<Model> Confirmed = new List<Model>
     {
-        // TODO: preencher com o HardwareID real do monitor do Daniel quando confirmado.
-        // Exemplo (NÃO confirmado): new Model("GSM5BBF", "LG UltraGear 27GN750", "CVT-RB 2560x1440@60, Intel Iris Xe, ..."),
+        new Model("MUL2380", "Multilaser MN801",
+            "Confirmado em 13/10/2026 na máquina do Daniel: 2560x1440 @ 59,95 Hz em uso via HDMI, Intel Iris Xe. " +
+            "Timing CVT-RB 241,50 MHz (2720x1481) + plano B 50 Hz (201,42 MHz, mesmos totais)."),
     };
 
     public static Model? Find(string hardwareId) =>

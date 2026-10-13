@@ -17,7 +17,9 @@ public sealed class OverrideResult
     public List<byte[]> Blocks { get; } = new List<byte[]>();
 
     public List<string> Changes { get; } = new List<string>();
-    public DetailedTiming? Timing { get; set; }
+    /// <summary>Timings efetivamente adicionados; o primeiro é o principal.</summary>
+    public List<DetailedTiming> Timings { get; } = new List<DetailedTiming>();
+    public DetailedTiming? Timing => Timings.Count > 0 ? Timings[0] : null;
 
     public static OverrideResult Fail(string error) => new OverrideResult { Success = false, Error = error };
 }
@@ -29,10 +31,17 @@ public sealed class OverrideResult
 /// </summary>
 public static class EdidOverrideBuilder
 {
-    public static OverrideResult Build(byte[] original, DetailedTiming target)
+    public static OverrideResult Build(byte[] original, DetailedTiming target) =>
+        Build(original, new[] { target });
+
+    /// <summary>
+    /// Adiciona um ou mais timings. O primeiro é o principal (falha se já existir); os demais
+    /// (ex.: plano B a 50 Hz) são ignorados com aviso se já existirem ou se faltar espaço.
+    /// </summary>
+    public static OverrideResult Build(byte[] original, IList<DetailedTiming> targets)
     {
         if (original == null) throw new ArgumentNullException(nameof(original));
-        if (target == null) throw new ArgumentNullException(nameof(target));
+        if (targets == null || targets.Count == 0) throw new ArgumentNullException(nameof(targets));
 
         if (original.Length < EdidParser.BlockLength || original.Length % EdidParser.BlockLength != 0)
             return OverrideResult.Fail($"EDID original com tamanho inválido ({original.Length} bytes).");
@@ -42,25 +51,48 @@ public static class EdidOverrideBuilder
         if (info.BadChecksumBlocks.Count > 0)
             return OverrideResult.Fail("EDID original com checksum inválido no(s) bloco(s) " + string.Join(", ", info.BadChecksumBlocks) + ". Leitura corrompida?");
 
-        var timing = target.Clone();
-        if (info.PreferredTiming != null && timing.ImageWidthMm == 0 && timing.ImageHeightMm == 0)
-        {
-            timing.ImageWidthMm = info.PreferredTiming.ImageWidthMm;
-            timing.ImageHeightMm = info.PreferredTiming.ImageHeightMm;
-        }
-        try { timing.Validate(); }
-        catch (InvalidOperationException ex) { return OverrideResult.Fail(ex.Message); }
-
-        if (info.Modes.Any(m => m.Width == timing.HActive && m.Height == timing.DisplayHeight && Math.Abs(m.RefreshHz - timing.RefreshHz) < 0.5))
-            return OverrideResult.Fail($"O EDID já anuncia {timing.HActive}x{timing.DisplayHeight} @ ~{timing.RefreshHz:0} Hz. Não é preciso override para este modo; o limite está na GPU, na porta ou no cabo.");
-
-        var result = new OverrideResult { Timing = timing };
+        var result = new OverrideResult();
         var touched = new SortedSet<int>();
-        var d = Place((byte[])info.Raw.Clone(), info, timing, result, touched);
-        if (d == null)
-            return OverrideResult.Fail("Não há espaço para mais um DTD: nenhum descritor 'dummy' livre no bloco base e nenhum slot livre na extensão CTA-861.");
+        var d = (byte[])info.Raw.Clone();
 
-        AdjustRangeLimits(d, info, timing, result, touched);
+        for (int i = 0; i < targets.Count; i++)
+        {
+            bool primary = i == 0;
+            var timing = targets[i].Clone();
+            if (info.PreferredTiming != null && timing.ImageWidthMm == 0 && timing.ImageHeightMm == 0)
+            {
+                timing.ImageWidthMm = info.PreferredTiming.ImageWidthMm;
+                timing.ImageHeightMm = info.PreferredTiming.ImageHeightMm;
+            }
+            try { timing.Validate(); }
+            catch (InvalidOperationException ex)
+            {
+                if (primary) return OverrideResult.Fail(ex.Message);
+                result.Changes.Add($"Timing extra {timing} ignorado: {ex.Message}");
+                continue;
+            }
+
+            var current = EdidParser.Parse(d);
+            if (current.Modes.Any(m => m.Width == timing.HActive && m.Height == timing.DisplayHeight && Math.Abs(m.RefreshHz - timing.RefreshHz) < 0.5))
+            {
+                if (primary)
+                    return OverrideResult.Fail($"O EDID já anuncia {timing.HActive}x{timing.DisplayHeight} @ ~{timing.RefreshHz:0} Hz. Não é preciso override para este modo; se o Windows não o oferece, o limite está na GPU, na porta ou no cabo.");
+                result.Changes.Add($"Timing extra {timing} ignorado: o EDID já o anuncia.");
+                continue;
+            }
+
+            var placed = Place(d, current, timing, result, touched);
+            if (placed == null)
+            {
+                if (primary)
+                    return OverrideResult.Fail("Não há espaço para mais um DTD: nenhum descritor 'dummy' livre no bloco base e nenhum slot livre na extensão CTA-861.");
+                result.Changes.Add($"Timing extra {timing} ignorado: sem espaço para mais um DTD.");
+                continue;
+            }
+            d = placed;
+            AdjustRangeLimits(d, EdidParser.Parse(d), timing, result, touched);
+            result.Timings.Add(timing);
+        }
 
         foreach (int b in touched)
         {
@@ -76,17 +108,29 @@ public static class EdidOverrideBuilder
             result.Blocks.Add(block);
         }
 
-        // Autoverificação: o resultado precisa ser um EDID válido que contém o novo modo e mantém o preferido.
+        // Autoverificação: EDID válido, com todos os novos modos e o mesmo timing preferido.
         var check = EdidParser.Parse(d);
         if (check.BadChecksumBlocks.Count > 0)
             return OverrideResult.Fail("Erro interno: checksum inválido no EDID gerado.");
-        if (!check.Modes.Any(m => m.Width == timing.HActive && m.Height == timing.DisplayHeight && m.PixelClockKHz == (timing.PixelClockKHz + 5) / 10 * 10))
-            return OverrideResult.Fail("Erro interno: o novo timing não aparece no EDID gerado.");
+        foreach (var t in result.Timings)
+            if (!check.Modes.Any(m => m.Width == t.HActive && m.Height == t.DisplayHeight && m.PixelClockKHz == (t.PixelClockKHz + 5) / 10 * 10))
+                return OverrideResult.Fail("Erro interno: um novo timing não aparece no EDID gerado.");
         if (info.PreferredTiming != null && check.PreferredTiming?.ToString() != info.PreferredTiming.ToString())
             return OverrideResult.Fail("Erro interno: o timing preferido foi alterado.");
 
         result.Success = true;
         return result;
+    }
+
+    /// <summary>
+    /// Mesmo timing (mesmos porches e totais) com o pixel clock reduzido para outra taxa.
+    /// É a forma do "plano B" de 50 Hz que funcionou no MN801: 2720x1481 a 201,42 MHz.
+    /// </summary>
+    public static DetailedTiming AtRefresh(DetailedTiming t, double refreshHz)
+    {
+        var c = t.Clone();
+        c.PixelClockKHz = (int)Math.Round(t.HTotal * (double)t.VTotal * refreshHz / 10000.0) * 10;
+        return c;
     }
 
     /// <summary>Grava o DTD e devolve o EDID resultante (pode ser maior, caso 3), ou null se não houver espaço.</summary>

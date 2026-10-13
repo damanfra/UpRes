@@ -68,8 +68,14 @@ public sealed class MonitorContext
     public byte[]? Edid { get; set; }
     public string EdidSource { get; set; } = "";
 
+    /// <summary>EDID como o Windows o entrega via WMI (WmiGetMonitorRawEEdidV1Block), para comparar com o do registro.</summary>
+    public byte[]? WmiEdid { get; set; }
+
     /// <summary>Override já existente nesta máquina (valores "0", "1"... concatenados), se houver.</summary>
     public byte[]? ExistingOverride { get; set; }
+
+    /// <summary>Todos os EDID_OVERRIDE encontrados em Enum\DISPLAY nesta máquina (inclusive de outras instâncias).</summary>
+    public List<FoundOverride> OtherOverrides { get; } = new List<FoundOverride>();
 
     public List<string> Notes { get; } = new List<string>();
 
@@ -77,6 +83,24 @@ public sealed class MonitorContext
     public string RegistrySubPath => $@"SYSTEM\CurrentControlSet\Enum\DISPLAY\{HardwareId}\{InstanceId}";
 
     public string OverrideKeyPath => $@"HKEY_LOCAL_MACHINE\{RegistrySubPath}\Device Parameters\EDID_OVERRIDE";
+}
+
+/// <summary>Um EDID_OVERRIDE encontrado no registro.</summary>
+public sealed class FoundOverride
+{
+    public FoundOverride(string hardwareId, string instanceId, byte[] data, bool isActiveInstance)
+    { HardwareId = hardwareId; InstanceId = instanceId; Data = data; IsActiveInstance = isActiveInstance; }
+
+    public string HardwareId { get; }
+    public string InstanceId { get; }
+    public byte[] Data { get; }
+
+    /// <summary>True se é a instância de algum monitor ativo agora.</summary>
+    public bool IsActiveInstance { get; }
+
+    public string KeyPath => $@"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Enum\DISPLAY\{HardwareId}\{InstanceId}\Device Parameters\EDID_OVERRIDE";
+
+    public override string ToString() => $@"{HardwareId}\{InstanceId} ({Data.Length / 128} bloco(s){(IsActiveInstance ? ", instância ativa" : ", instância inativa")})";
 }
 
 public static class DevicePath

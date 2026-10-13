@@ -64,7 +64,8 @@ public sealed class Evaluation
 /// <summary>Heurísticas somente leitura para decidir se vale tentar o override.</summary>
 public static class Evaluator
 {
-    public static Evaluation Evaluate(MonitorContext ctx, DetailedTiming target)
+    /// <param name="extraTimings">Timings adicionais para o mesmo override (ex.: plano B a 50 Hz).</param>
+    public static Evaluation Evaluate(MonitorContext ctx, DetailedTiming target, IList<DetailedTiming>? extraTimings = null)
     {
         if (ctx == null) throw new ArgumentNullException(nameof(ctx));
         if (target == null) throw new ArgumentNullException(nameof(target));
@@ -114,6 +115,19 @@ public static class Evaluator
             }
         }
 
+        // Overrides em outras instâncias (ex.: gravados com o InstanceID de outra máquina/porta) não têm efeito.
+        var elsewhere = ctx.OtherOverrides.Where(o => !o.IsActiveInstance).ToList();
+        if (elsewhere.Count > 0)
+        {
+            var sameModel = elsewhere.Where(o => o.HardwareId.Equals(ctx.HardwareId, StringComparison.OrdinalIgnoreCase)).ToList();
+            ev.Checks.Add(new Check("Overrides em outras instâncias",
+                sameModel.Count > 0 ? CheckStatus.Atencao : CheckStatus.Info,
+                (sameModel.Count > 0
+                    ? $"Há EDID_OVERRIDE para {ctx.HardwareId} em instância(s) que NÃO são a ativa ({string.Join(", ", sameModel.Select(o => o.InstanceId))}). Eles não afetam este monitor nesta porta. "
+                    : "") +
+                "Overrides encontrados no registro: " + string.Join("; ", elsewhere.Select(o => o.ToString())) + "."));
+        }
+
         if (ctx.Edid == null || ctx.Edid.Length < EdidParser.BlockLength)
         {
             ev.Checks.Add(new Check("EDID", CheckStatus.Falha, "Não foi possível ler o EDID deste monitor."));
@@ -132,6 +146,14 @@ public static class Evaluator
         if (ev.ExistingOverride != null && ctx.ExistingOverride != null && ctx.Edid.SequenceEqual(ctx.ExistingOverride))
             ev.Checks.Add(new Check("Fonte do EDID", CheckStatus.Atencao,
                 "O EDID lido é idêntico ao override existente; o original pode estar mascarado. Se possível, rode o app numa máquina sem override."));
+
+        if (ctx.WmiEdid != null && ctx.EdidSource.StartsWith("registro", StringComparison.Ordinal))
+        {
+            bool same = ctx.WmiEdid.Length >= ctx.Edid.Length && ctx.WmiEdid.Take(ctx.Edid.Length).SequenceEqual(ctx.Edid);
+            ev.Checks.Add(same
+                ? new Check("EDID registro x WMI", CheckStatus.Ok, "O EDID do registro é igual ao que o Windows entrega via WMI.")
+                : new Check("EDID registro x WMI", CheckStatus.Atencao, "O EDID do registro DIFERE do entregue via WMI. Um dos dois foi alterado (override ativo ou script antigo); veja a aba 'EDID (hex)'."));
+        }
 
         if (!edid.HeaderValid || edid.BadChecksumBlocks.Count > 0)
             ev.Checks.Add(new Check("Integridade do EDID", CheckStatus.Falha,
@@ -157,22 +179,19 @@ public static class Evaluator
             ev.Checks.Add(new Check("Resolução nativa", CheckStatus.Info, $"Timing preferido: {native}."));
         }
 
-        // Windows já oferece?
+        // Windows já oferece? (não encerra aqui: o resto do diagnóstico explica de onde vem o modo)
         var offered = ctx.WindowsModes.Where(m => m.Width == tw && m.Height == th).ToList();
+        var inEdid = edid.Modes.Where(m => m.Width == tw && m.Height == th).ToList();
+        bool inOverride = ev.ExistingOverride?.Modes.Any(m => m.Width == tw && m.Height == th) == true;
         if (offered.Count > 0)
-        {
             ev.Checks.Add(new Check("Windows", CheckStatus.Ok,
-                $"O Windows já oferece {tLabel} ({string.Join(", ", offered.Select(m => m.RefreshHz + " Hz").Distinct())})" +
-                (ctx.ExistingOverride != null ? ", provavelmente pelo override existente." : ".")));
-            return Finish(ev, Verdict.JaDisponivel, $"{tLabel} já está disponível em Configurações > Tela. Nada a fazer.");
-        }
+                $"O Windows já oferece {tLabel} ({string.Join(", ", offered.Select(m => m.RefreshHz + " Hz").Distinct())})."));
 
         // 1440p já no EDID?
-        var inEdid = edid.Modes.Where(m => m.Width == tw && m.Height == th).ToList();
         if (inEdid.Count > 0)
-            ev.Checks.Add(new Check($"{tLabel} no EDID", CheckStatus.Atencao,
-                $"O EDID já anuncia {tLabel} ({string.Join("; ", inEdid.Select(m => m.ToString()))}), mas o Windows não oferece. " +
-                "O limite provavelmente é a GPU, a porta ou o cabo, e não o monitor."));
+            ev.Checks.Add(new Check($"{tLabel} no EDID", offered.Count > 0 ? CheckStatus.Ok : CheckStatus.Atencao,
+                $"O próprio EDID do monitor já anuncia {tLabel} ({string.Join("; ", inEdid.Select(m => m.ToString()))})." +
+                (offered.Count > 0 ? "" : " Mas o Windows não oferece: o limite provavelmente é a GPU, a porta ou o cabo, e não o monitor.")));
         else
             ev.Checks.Add(new Check($"{tLabel} no EDID", CheckStatus.Info,
                 $"Não anunciado (normal: não existe VIC CTA-861 para {tLabel} e Standard Timings não chegam a 2560 de largura)."));
@@ -229,6 +248,21 @@ public static class Evaluator
                 "Bem acima do que o monitor anuncia; costuma dar 'Out of range'.")));
         }
 
+        // O Range Limits é o limite DECLARADO da entrada. Se ele comporta o modo, banda e frequência H
+        // não são "Falha" mesmo sem nenhum modo anunciado tão alto (calibrado no Multilaser MN801:
+        // maior modo 185,59 MHz / 84,36 kHz, Range Limits 300 MHz / 90 kHz, e 2560x1440@60 funciona).
+        var cap = edid.RangeLimits;
+        if (cap != null && cap.MaxPixelClockMHz >= target.PixelClockMHz && cap.MaxHKHz >= target.HFreqKHz
+            && (pclkStatus == CheckStatus.Atencao || pclkStatus == CheckStatus.Falha || hStatus == CheckStatus.Atencao || hStatus == CheckStatus.Falha))
+        {
+            pclkStatus = hStatus = CheckStatus.Ok;
+            maxPclkMHz = Math.Max(maxPclkMHz, cap.MaxPixelClockMHz);
+            maxH = Math.Max(maxH, cap.MaxHKHz);
+            ev.Checks.Add(new Check("Limites declarados", CheckStatus.Ok, F(
+                "Nenhum modo anunciado chega a {0:0.00} MHz / {1:0.00} kHz, mas o Range Limits declara até {2:0.##} MHz / {3} kHz. " +
+                "Isso indica que a entrada foi projetada para aceitar o modo.", target.PixelClockMHz, target.HFreqKHz, cap.MaxPixelClockMHz, cap.MaxHKHz)));
+        }
+
         // Range limits
         var rl = edid.RangeLimits;
         if (rl != null)
@@ -276,7 +310,9 @@ public static class Evaluator
         }
 
         // Montagem do override
-        ev.Override = EdidOverrideBuilder.Build(ctx.Edid, target);
+        var all = new List<DetailedTiming> { target };
+        if (extraTimings != null) all.AddRange(extraTimings);
+        ev.Override = EdidOverrideBuilder.Build(ctx.Edid, all);
         ev.Checks.Add(ev.Override.Success
             ? new Check("Override", CheckStatus.Ok, "EDID modificado gerado: " + string.Join(" ", ev.Override.Changes))
             : new Check("Override", CheckStatus.Falha, ev.Override.Error ?? "Falha desconhecida."));
@@ -298,6 +334,20 @@ public static class Evaluator
         }
 
         // Veredito
+        if (offered.Count > 0)
+        {
+            string source = inEdid.Count > 0
+                ? (inOverride
+                    ? "Vem do EDID_OVERRIDE existente desta instância."
+                    : "O EDID do registro já anuncia este modo e não há EDID_OVERRIDE nesta instância. Ou o EDID de fábrica já traz " +
+                      "este modo, ou o valor EDID foi alterado por um script antigo. Para saber qual, compare com o relatório de uma máquina onde nada foi aplicado.")
+                : inOverride
+                    ? "Vem do EDID_OVERRIDE existente desta instância."
+                    : "Nem o EDID lido nem um override desta instância anunciam este modo. Prováveis fontes: escala do driver " +
+                      "(NVIDIA DSR/DLDSR, AMD VSR), resolução personalizada no painel do driver (Intel/NVIDIA/AMD), " +
+                      "ou o valor EDID do registro não é o que o driver está usando.";
+            return Finish(ev, Verdict.JaDisponivel, $"{tLabel} já está disponível em Configurações > Tela. {source}");
+        }
         if (internalPanel)
             return Finish(ev, Verdict.Improvavel, "Tela interna: fora do escopo.");
         if (pclkStatus == CheckStatus.Falha || hStatus == CheckStatus.Falha || hdmiStatus == CheckStatus.Falha)

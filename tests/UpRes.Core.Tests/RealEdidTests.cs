@@ -1,0 +1,96 @@
+using System;
+using System.IO;
+using System.Linq;
+using UpRes.Core.Analysis;
+using UpRes.Core.Edid;
+using UpRes.Core.Output;
+using Xunit;
+
+namespace UpRes.Core.Tests;
+
+/// <summary>Testes com o EDID real do Multilaser MN801 (MUL2380), em que 2560x1440 funciona.</summary>
+public class RealEdidTests
+{
+    internal static byte[] LoadHex(string name)
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", name);
+        var hex = File.ReadAllLines(path)
+            .Where(l => !l.TrimStart().StartsWith("#"))
+            .SelectMany(l => l.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries));
+        return hex.Select(h => Convert.ToByte(h, 16)).ToArray();
+    }
+
+    private static byte[] Working => LoadHex("MUL2380_MN801_registro.hex");
+
+    /// <summary>O mesmo EDID sem os dois DTDs de 2560x1440 (offsets 67–102 do bloco CTA).</summary>
+    private static byte[] Stripped()
+    {
+        var d = Working;
+        Array.Clear(d, 128 + 67, 36);
+        EdidParser.FixChecksum(d, 1);
+        return d;
+    }
+
+    private static DetailedTiming T60 => CvtReducedBlanking.Compute(2560, 1440, 60);
+
+    [Fact]
+    public void Parses_mn801()
+    {
+        var e = EdidParser.Parse(Working);
+        Assert.Empty(e.BadChecksumBlocks);
+        Assert.Equal("MUL2380", e.HardwareId);
+        Assert.Equal("MN801", e.MonitorName);
+        Assert.Equal(1920, e.PreferredTiming!.HActive);
+        Assert.Equal(300, e.RangeLimits!.MaxPixelClockMHz);
+        Assert.Equal(90, e.RangeLimits.MaxHKHz);
+        Assert.Equal(300, e.HdmiMaxTmdsMHz);
+        Assert.Contains(e.Modes, m => m.Width == 2560 && m.Height == 1440 && m.PixelClockKHz == 241500);
+        Assert.Contains(e.Modes, m => m.Width == 2560 && m.Height == 1440 && m.PixelClockKHz == 201420);
+    }
+
+    [Fact]
+    public void Plan_b_50hz_matches_the_working_dtd()
+    {
+        Assert.Equal(201420, EdidOverrideBuilder.AtRefresh(T60, 50).PixelClockKHz);
+    }
+
+    [Fact]
+    public void Generator_reproduces_the_working_edid_byte_for_byte()
+    {
+        var r = EdidOverrideBuilder.Build(Stripped(), new[] { T60, EdidOverrideBuilder.AtRefresh(T60, 50) });
+        Assert.True(r.Success, r.Error);
+        Assert.Equal(2, r.Timings.Count);
+        Assert.Equal(Working, r.Edid);
+    }
+
+    [Fact]
+    public void Stripped_mn801_is_likely_thanks_to_declared_range_limits()
+    {
+        var ctx = new MonitorContext
+        {
+            FriendlyName = "MN801", HardwareId = "MUL2380", InstanceId = "4&12ecdce7&0&UID4145", RegistryKeyFound = true,
+            Connection = ConnectionKind.Hdmi, Gpu = GpuVendor.Intel, Edid = Stripped(), EdidSource = "teste",
+        };
+        var ev = Evaluator.Evaluate(ctx, T60);
+        Assert.Equal(Verdict.Provavel, ev.Verdict);
+        Assert.Contains("modelo confirmado", ev.VerdictText);
+        Assert.Contains(ev.Checks, c => c.Title == "Limites declarados");
+    }
+
+    [Fact]
+    public void Working_machine_reports_already_available_and_explains_source()
+    {
+        var ctx = new MonitorContext
+        {
+            FriendlyName = "MN801", HardwareId = "MUL2380", InstanceId = "4&12ecdce7&0&UID4145", RegistryKeyFound = true,
+            Connection = ConnectionKind.Hdmi, Gpu = GpuVendor.Intel, Edid = Working, EdidSource = "registro (Device Parameters\\EDID)",
+        };
+        ctx.WindowsModes.Add(new WindowsMode(2560, 1440, 60));
+        ctx.OtherOverrides.Add(new FoundOverride("MUL2380", "4&12ecdce7&0&UID4144", Working, isActiveInstance: false));
+        var ev = Evaluator.Evaluate(ctx, T60);
+        Assert.Equal(Verdict.JaDisponivel, ev.Verdict);
+        Assert.Contains("script antigo", ev.Summary);
+        Assert.Contains(ev.Checks, c => c.Title == "Overrides em outras instâncias" && c.Status == CheckStatus.Atencao);
+        Assert.Contains("UID4144", RegFileGenerator.Backup(ctx.OtherOverrides[0]));
+    }
+}

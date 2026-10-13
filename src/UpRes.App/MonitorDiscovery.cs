@@ -30,10 +30,55 @@ internal static class MonitorDiscovery
         }
 
         // Clone/espelhamento gera mais de um caminho para o mesmo monitor.
-        return list
+        list = list
             .GroupBy(m => string.IsNullOrEmpty(m.MonitorDevicePath) ? Guid.NewGuid().ToString() : m.MonitorDevicePath, StringComparer.OrdinalIgnoreCase)
             .Select(g => g.First())
             .ToList();
+
+        var found = ScanAllOverrides(list);
+        foreach (var ctx in list) ctx.OtherOverrides.AddRange(found);
+        return list;
+    }
+
+    /// <summary>Procura EDID_OVERRIDE em todas as instâncias de Enum\DISPLAY (inclusive monitores antigos/inativos).</summary>
+    private static List<FoundOverride> ScanAllOverrides(List<MonitorContext> active)
+    {
+        var result = new List<FoundOverride>();
+        try
+        {
+            using var root = Registry.LocalMachine.OpenSubKey(EnumDisplay, writable: false);
+            if (root == null) return result;
+            foreach (var hwid in root.GetSubKeyNames())
+            {
+                using var hw = root.OpenSubKey(hwid, writable: false);
+                if (hw == null) continue;
+                foreach (var inst in hw.GetSubKeyNames())
+                {
+                    try
+                    {
+                        using var ov = hw.OpenSubKey(inst + @"\Device Parameters\EDID_OVERRIDE", writable: false);
+                        if (ov == null) continue;
+                        var data = ReadBlocks(ov);
+                        bool isActive = active.Any(a => a.HardwareId.Equals(hwid, StringComparison.OrdinalIgnoreCase)
+                                                     && a.InstanceId.Equals(inst, StringComparison.OrdinalIgnoreCase));
+                        result.Add(new FoundOverride(hwid, inst, data ?? new byte[0], isActive));
+                    }
+                    catch (Exception ex) when (ex is System.Security.SecurityException || ex is UnauthorizedAccessException) { }
+                }
+            }
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException || ex is UnauthorizedAccessException) { }
+        return result;
+    }
+
+    private static byte[]? ReadBlocks(RegistryKey ov)
+    {
+        var blocks = ov.GetValueNames()
+            .Select(n => int.TryParse(n, out int i) ? (Index: i, Data: ov.GetValue(n) as byte[]) : (Index: -1, Data: null))
+            .Where(x => x.Index >= 0 && x.Data != null)
+            .OrderBy(x => x.Index)
+            .ToList();
+        return blocks.Count > 0 ? blocks.SelectMany(b => b.Data!).ToArray() : null;
     }
 
     private static DISPLAYCONFIG_PATH_INFO[] QueryActivePaths()
@@ -94,7 +139,12 @@ internal static class MonitorDiscovery
         if (string.IsNullOrEmpty(ctx.FriendlyName)) ctx.FriendlyName = hwid;
 
         ReadRegistry(ctx);
-        if (ctx.Edid == null) ReadWmi(ctx);
+        ReadWmi(ctx);
+        if (ctx.Edid == null && ctx.WmiEdid != null)
+        {
+            ctx.Edid = ctx.WmiEdid;
+            ctx.EdidSource = "WMI (WmiGetMonitorRawEEdidV1Block)";
+        }
     }
 
     private static void ReadRegistry(MonitorContext ctx)
@@ -130,14 +180,8 @@ internal static class MonitorDiscovery
             using var ov = dp.OpenSubKey("EDID_OVERRIDE", writable: false);
             if (ov != null)
             {
-                var blocks = ov.GetValueNames()
-                    .Select(n => int.TryParse(n, out int i) ? (Index: i, Data: ov.GetValue(n) as byte[]) : (Index: -1, Data: null))
-                    .Where(x => x.Index >= 0 && x.Data != null)
-                    .OrderBy(x => x.Index)
-                    .ToList();
-                if (blocks.Count > 0)
-                    ctx.ExistingOverride = blocks.SelectMany(b => b.Data!).ToArray();
-                else
+                ctx.ExistingOverride = ReadBlocks(ov);
+                if (ctx.ExistingOverride == null)
                     ctx.Notes.Add("Existe a chave EDID_OVERRIDE, mas sem valores \"0\", \"1\"...");
             }
         }
@@ -147,7 +191,7 @@ internal static class MonitorDiscovery
         }
     }
 
-    /// <summary>Plano B: WmiMonitorDescriptorMethods (pode refletir o override, se houver).</summary>
+    /// <summary>EDID via WmiMonitorDescriptorMethods (o que o Windows entrega; pode refletir o override, se houver).</summary>
     private static void ReadWmi(MonitorContext ctx)
     {
         try
@@ -174,11 +218,7 @@ internal static class MonitorDiscovery
                         if (block == 0 && content[126] == 0) break;
                         if (block >= all[126]) break;
                     }
-                    if (all.Count >= 128)
-                    {
-                        ctx.Edid = all.ToArray();
-                        ctx.EdidSource = "WMI (WmiGetMonitorRawEEdidV1Block)";
-                    }
+                    if (all.Count >= 128) ctx.WmiEdid = all.ToArray();
                     return;
                 }
             }
