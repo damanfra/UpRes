@@ -87,6 +87,6 @@ Build: `dotnet build UpRes.sln` · testes: `dotnet test` · publicar: `dotnet bu
 - [x] Opção de tornar permanente o EDID atual quando falta o override (aba "Aplicar").
 - [x] Daniel importou o "Aplicar" (build `863058b`, 15:26): `EDID_OVERRIDE` presente na instância ativa, idêntico ao EDID que funciona.
 - [x] Diagnóstico pós-aplicação limpo: sem FALHA de override, sem evidência circular em "Acima da nativa", "Fonte do EDID" como INFO.
-- [ ] **Reiniciar** e confirmar que 2560×1440 continua oferecido (prova de que o override sustenta o modo).
+- [x] **Reinício confirmado** (build `b7cc87f`, 15:33): 2560×1440 continua em uso, com o `EDID_OVERRIDE` na instância ativa. A máquina do Daniel está resolvida. O nome GDI mudou de `DISPLAY7` para `DISPLAY2` (normal); o InstanceID não mudou.
 - [ ] Daniel roda a versão nova: ver se aparece algum `EDID_OVERRIDE` em outra instância e se o EDID do WMI difere do registro.
 - [ ] Validar na máquina do colega: gerar lá e aplicar manualmente o `.reg` com o InstanceID dele.
