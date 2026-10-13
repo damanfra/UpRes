@@ -363,6 +363,9 @@ public static class Evaluator
                 keep.Changes.Add("Nenhuma alteração: o override é cópia exata do EDID em uso agora (que já contém " + tLabel + "), para que o modo sobreviva a reinícios e reconexões.");
                 ev.Override = keep;
                 ev.PersistCurrent = true;
+                ev.Checks.RemoveAll(c => c.Title == "Override");
+                ev.Checks.Add(new Check("Override", CheckStatus.Ok,
+                    "Override proposto = cópia exata do EDID em uso (nenhum byte alterado), com " + keep.Blocks.Count + " bloco(s)."));
                 ev.Checks.Add(new Check("Persistência", CheckStatus.Atencao,
                     "Não há EDID_OVERRIDE nesta instância. Se o 1440p foi obtido hoje por script/override que depois foi removido " +
                     "(ex.: remediação do antivírus), ele pode SUMIR no próximo reinício ou reconexão do monitor. " +

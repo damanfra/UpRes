@@ -112,6 +112,7 @@ public class PersistTests
         Assert.True(ev.PersistCurrent);
         Assert.True(ev.RecommendGenerate);
         Assert.Equal(2, ev.Override!.Timings.Count);
+        Assert.DoesNotContain(ev.Checks, c => c.Title == "Override" && c.Status == CheckStatus.Falha);
 
         var reg = RegFileGenerator.Apply(ctx, ev.Override);
         var values = RegFileGenerator.ParseBinaryValues(reg);
