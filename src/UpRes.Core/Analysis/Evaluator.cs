@@ -51,7 +51,13 @@ public sealed class Evaluation
     public OverrideResult? Override { get; set; }
 
     /// <summary>Veredito permite gerar os arquivos sem confirmação extra.</summary>
-    public bool RecommendGenerate => Override?.Success == true && (Verdict == Verdict.Provavel || Verdict == Verdict.Incerto);
+    public bool RecommendGenerate => Override?.Success == true && (Verdict == Verdict.Provavel || Verdict == Verdict.Incerto || PersistCurrent);
+
+    /// <summary>
+    /// O modo funciona agora só porque o EDID em uso já o contém, mas não há EDID_OVERRIDE que o preserve
+    /// (ex.: chave apagada pela remediação do antivírus). O .reg gerado grava o EDID ATUAL como override.
+    /// </summary>
+    public bool PersistCurrent { get; set; }
 
     /// <summary>Taxa (Hz) que caberia nos limites anunciados, quando a pedida não cabe.</summary>
     public int? SuggestedRefreshHz { get; set; }
@@ -346,6 +352,23 @@ public static class Evaluator
                     : "Nem o EDID lido nem um override desta instância anunciam este modo. Prováveis fontes: escala do driver " +
                       "(NVIDIA DSR/DLDSR, AMD VSR), resolução personalizada no painel do driver (Intel/NVIDIA/AMD), " +
                       "ou o valor EDID do registro não é o que o driver está usando.";
+            if (inEdid.Count > 0 && !inOverride && ctx.ExistingOverride == null && !edid.BadChecksumBlocks.Any())
+            {
+                // Torna permanente: o override é o próprio EDID em uso hoje, sem alterações.
+                var keep = new OverrideResult { Success = true, Edid = (byte[])ctx.Edid.Clone() };
+                keep.Blocks.AddRange(Output.RegFileGenerator.Split(ctx.Edid));
+                keep.Timings.AddRange(edid.BaseDescriptors.Where(d => d.Timing != null).Select(d => d.Timing!)
+                    .Concat(edid.CtaExtensions.SelectMany(c => c.Dtds))
+                    .Where(t => t.Is(tw, th)));
+                keep.Changes.Add("Nenhuma alteração: o override é cópia exata do EDID em uso agora (que já contém " + tLabel + "), para que o modo sobreviva a reinícios e reconexões.");
+                ev.Override = keep;
+                ev.PersistCurrent = true;
+                ev.Checks.Add(new Check("Persistência", CheckStatus.Atencao,
+                    "Não há EDID_OVERRIDE nesta instância. Se o 1440p foi obtido hoje por script/override que depois foi removido " +
+                    "(ex.: remediação do antivírus), ele pode SUMIR no próximo reinício ou reconexão do monitor. " +
+                    "A aba 'Aplicar' grava o EDID atual como override para torná-lo permanente. Salve-a ANTES de reiniciar."));
+                source += " Atenção: sem override, o modo pode não sobreviver a um reinício; veja a aba 'Aplicar'.";
+            }
             return Finish(ev, Verdict.JaDisponivel, $"{tLabel} já está disponível em Configurações > Tela. {source}");
         }
         if (internalPanel)

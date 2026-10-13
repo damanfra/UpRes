@@ -61,6 +61,7 @@ Build: `dotnet build UpRes.sln` · testes: `dotnet test` · publicar: `dotnet bu
   - (b) o script antigo gravou direto no valor `EDID`, ou o override está noutro lugar.
 
   Para separar as duas: o app agora varre **todos** os `EDID_OVERRIDE` de `Enum\DISPLAY`, compara o EDID do registro com o do WMI, e falta o relatório de uma máquina onde nada foi aplicado (a do colega).
+- **Correção do Daniel:** o MN801 só passou a rodar 1440p **hoje**, depois do script da sessão anterior. Logo o EDID de fábrica provavelmente não traz 1440p. Hipótese mais forte: a remediação do SentinelOne desfez as alterações de registro do processo bloqueado e apagou o `EDID_OVERRIDE`. O valor `EDID` ainda guarda o conteúdo modificado (cache da última detecção do monitor), então o modo **pode sumir no próximo reinício ou reconexão**. Por isso, quando não há override, o app oferece gravar o EDID atual como `EDID_OVERRIDE` (`Evaluation.PersistCurrent`).
 - Calibração: o maior modo anunciado (185,59 MHz / 84,36 kHz) fica abaixo do necessário, mas o 1440p funciona. Por isso o `Evaluator` passou a considerar o **Range Limits declarado** como capacidade da entrada.
 - O EDID real está em `tests/UpRes.Core.Tests/Fixtures/MUL2380_MN801_registro.hex`.
 
@@ -75,5 +76,7 @@ Build: `dotnet build UpRes.sln` · testes: `dotnet test` · publicar: `dotnet bu
 - [x] Daniel compilou e rodou o app na máquina dele. O SentinelOne não bloqueou. O relatório foi recebido.
 - [x] Monitor identificado: Multilaser MN801 (`MUL2380`), adicionado em `KnownModels`. O timing foi confirmado e o gerador reproduz o EDID que funciona.
 - [x] Override com 60 Hz + plano B de 50 Hz. Varredura de overrides em todas as instâncias. Comparação registro × WMI.
+- [x] Opção de tornar permanente o EDID atual quando falta o override (aba "Aplicar").
+- [ ] Daniel salva o "Aplicar" e o "Desfazer" **antes de reiniciar** e importa manualmente, se o TI concordar.
 - [ ] Daniel roda a versão nova: ver se aparece algum `EDID_OVERRIDE` em outra instância e se o EDID do WMI difere do registro.
 - [ ] Validar na máquina do colega: gerar lá e aplicar manualmente o `.reg` com o InstanceID dele.

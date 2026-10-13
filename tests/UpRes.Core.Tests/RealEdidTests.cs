@@ -94,3 +94,28 @@ public class RealEdidTests
         Assert.Contains("UID4144", RegFileGenerator.Backup(ctx.OtherOverrides[0]));
     }
 }
+
+public class PersistTests
+{
+    [Fact]
+    public void Working_edid_without_override_is_offered_as_permanent_override()
+    {
+        var working = RealEdidTests.LoadHex("MUL2380_MN801_registro.hex");
+        var ctx = new MonitorContext
+        {
+            FriendlyName = "MN801", HardwareId = "MUL2380", InstanceId = "4&12ecdce7&0&UID4145", RegistryKeyFound = true,
+            Connection = ConnectionKind.Hdmi, Gpu = GpuVendor.Intel, Edid = working, EdidSource = "registro (Device Parameters\\EDID)",
+        };
+        ctx.WindowsModes.Add(new WindowsMode(2560, 1440, 60));
+        var ev = Evaluator.Evaluate(ctx, CvtReducedBlanking.Compute(2560, 1440, 60));
+        Assert.Equal(Verdict.JaDisponivel, ev.Verdict);
+        Assert.True(ev.PersistCurrent);
+        Assert.True(ev.RecommendGenerate);
+        Assert.Equal(2, ev.Override!.Timings.Count);
+
+        var reg = RegFileGenerator.Apply(ctx, ev.Override);
+        var values = RegFileGenerator.ParseBinaryValues(reg);
+        Assert.Equal(working, values["0"].Concat(values["1"]).ToArray());
+        Assert.Contains(@"DISPLAY\MUL2380\4&12ecdce7&0&UID4145\Device Parameters\EDID_OVERRIDE]", reg);
+    }
+}
