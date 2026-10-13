@@ -1,0 +1,28 @@
+<Project>
+
+  <!--
+    Versão rastreável: InformationalVersion = <Version>+<git describe>, ex. 0.2.0+b160276 ou 0.2.0+b160276-dirty
+    (dirty = compilado com alterações locais não commitadas). Sem git disponível: 0.2.0+sem-git.
+    Só roda no BUILD (máquina de quem compila); o app em si nunca executa nada.
+  -->
+  <PropertyGroup>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+
+  <Target Name="UpResGitVersion" BeforeTargets="GetAssemblyVersion;GenerateAssemblyInfo">
+    <Exec Command="git describe --always --dirty --abbrev=7" WorkingDirectory="$(MSBuildThisFileDirectory)"
+          ConsoleToMSBuild="true" IgnoreExitCode="true" EchoOff="true"
+          StandardOutputImportance="low" StandardErrorImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="UpResGitDescribe" />
+      <Output TaskParameter="ExitCode" PropertyName="UpResGitExit" />
+    </Exec>
+    <PropertyGroup>
+      <UpResGitDescribe Condition="'$(UpResGitExit)' != '0' or '$(UpResGitDescribe)' == ''">sem-git</UpResGitDescribe>
+      <InformationalVersion>$(Version)+$(UpResGitDescribe)</InformationalVersion>
+    </PropertyGroup>
+    <ItemGroup>
+      <AssemblyMetadata Include="BuildDate" Value="$([System.DateTime]::Now.ToString('yyyy-MM-dd HH:mm'))" />
+    </ItemGroup>
+  </Target>
+
+</Project>

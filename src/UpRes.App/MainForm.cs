@@ -43,7 +43,7 @@ internal sealed class MainForm : Form
 
     public MainForm()
     {
-        Text = "UpRes — verificador de 2560x1440 (somente leitura)";
+        Text = $"UpRes — verificador de 2560x1440 (somente leitura) — {UpRes.Core.BuildInfo.Version}";
         AutoScaleMode = AutoScaleMode.Dpi;
         Font = SystemFonts.MessageBoxFont;
         StartPosition = FormStartPosition.CenterScreen;

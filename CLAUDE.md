@@ -26,6 +26,8 @@ src/UpRes.Core     netstandard2.0, sem Windows: parser EDID, CVT-RB, override, a
 src/UpRes.App      net48 WinForms: QueryDisplayConfig/EnumDisplaySettings (P/Invoke), registro/WMI só leitura, UI
 tests/UpRes.Core.Tests  xUnit (net10.0): fixtures sintéticas em EdidFactory; EDIDs reais irão para Fixtures/
 ```
+**Versão:** `Directory.Build.targets` grava `<Version>+<git describe --dirty>` (ex.: `0.2.0+b160276`) na InformationalVersion. Ela aparece no cabeçalho do relatório ("Versão: …"), no título da janela e nos comentários dos `.reg`/PowerShell. **Sempre confira a versão de um relatório recebido antes de interpretá-lo.** `-dirty` = compilado com alterações locais; `sem-git` = compilado fora de um clone git.
+
 Build: `dotnet build UpRes.sln` · testes: `dotnet test` · publicar: `dotnet build src/UpRes.App -c Release` (saída em `src/UpRes.App/bin/Release/net48/`).
 
 ## Fundamentos técnicos
@@ -57,10 +59,10 @@ Build: `dotnet build UpRes.sln` · testes: `dotnet test` · publicar: `dotnet bu
 ## Descobertas (relatório real, 13/10/2026)
 - O monitor do Daniel é um **Multilaser MN801** (`MUL2380`): 24", 1080p, até 75 Hz, ligado por **HDMI** numa Intel Iris Xe. Não é o LG 27GN750. Ele **roda hoje em 2560×1440 @ 59 Hz**.
 - Na instância ativa (`4&12ecdce7&0&UID4145`) **não existe `EDID_OVERRIDE`** (nem em nenhuma outra instância), mas o valor `Device Parameters\EDID` (igual ao WMI) **contém** os dois DTDs de 1440p.
-- **Arquivos originais recuperados** (`Aplicar-1440p.ps1/.reg`, `Desfazer-*`). O `.reg` está em `Fixtures/MUL2380_Aplicar-1440p_original.reg`. Conclusões:
-  - O script só gravou os DTDs 60 Hz e 50 Hz nos offsets `0xC3`/`0xD5` do bloco CTA e recalculou o checksum do bloco 1. **O bloco base, incluindo o Range Limits de fábrica (30–90 kHz / 300 MHz), não foi alterado.** Logo o EDID de fábrica é conhecido: é o atual sem esses dois DTDs (`RealEdidTests.Factory()`). Ele **não** traz 1440p.
+- **Arquivos recuperados** (`Aplicar-1440p.ps1/.reg`, `Desfazer-*`, `LEIA-ME.txt`): são o **pacote preparado para o colega**, derivado da máquina do Daniel que já funcionava. Não são o que aplicou o override no Daniel (esse foi o `apply-edid.ps1`, perdido). O `.reg` está em `Fixtures/MUL2380_Aplicar-1440p_original.reg`. Conclusões:
+  - O `.ps1` do pacote só grava os DTDs 60 Hz e 50 Hz nos offsets `0xC3`/`0xD5` do bloco CTA e recalculou o checksum do bloco 1. **O bloco base, incluindo o Range Limits de fábrica (30–90 kHz / 300 MHz), não foi alterado.** Ele só aceita EDIDs com essa área zerada. Logo o EDID de fábrica é conhecido, por evidência indireta mas consistente: é o atual sem esses dois DTDs (`RealEdidTests.Factory()`). Ele **não** traz 1440p.
   - O `.reg` original tem exatamente os blocos que o UpRes gera a partir do EDID de fábrica (teste `Generated_reg_has_the_same_blocks_as_the_original_working_reg`).
-  - Depois de gravar, o script desativava e reativava o adaptador de vídeo, e foi isso que fez o Windows reler o EDID. A chave sumiu depois (provável remediação do SentinelOne); o EDID modificado segue em cache até a próxima redetecção.
+  - Depois de gravar, o script do pacote desativava e reativava o adaptador de vídeo, e foi isso que fez o Windows reler o EDID. A chave sumiu depois (provável remediação do SentinelOne); o EDID modificado segue em cache até a próxima redetecção.
   - **Colega:** o `.ps1` percorria **todas** as instâncias de `MUL2380`, então o InstanceID não explica a falha **se** ele rodou o `.ps1`. Já o `.reg` antigo tem o InstanceID do Daniel fixo, e esse sim falharia. Outras causas possíveis no `.ps1`:
     - offsets fixos (EDID com revisão diferente → "Ignorado…");
     - falta de elevação ou ExecutionPolicy;

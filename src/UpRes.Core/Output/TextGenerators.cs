@@ -16,6 +16,7 @@ public static class PowerShellGenerator
         if (ov == null || !ov.Success) throw new InvalidOperationException("Override inválido.");
         var sb = new StringBuilder();
         sb.AppendLine("# Executar MANUALMENTE em um PowerShell como administrador. O UpRes nunca executa este texto.");
+        sb.AppendLine($"# Gerado por {BuildInfo.Display}.");
         sb.AppendLine($"# Adiciona {string.Join(" e ", ov.Timings)} ao EDID de {ctx.FriendlyName} ({ctx.HardwareId}) nesta máquina ({Environment.MachineName}).");
         sb.AppendLine($"$key = '{PsPath(ctx)}'");
         sb.AppendLine("if (Test-Path $key) { Remove-Item -Path $key -Recurse -Force }");
@@ -97,6 +98,7 @@ public static class ReportBuilder
     {
         var sb = new StringBuilder();
         sb.AppendLine($"UpRes — diagnóstico gerado em {DateTime.Now:yyyy-MM-dd HH:mm} na máquina {Environment.MachineName}");
+        sb.AppendLine($"Versão: {BuildInfo.Display}");
         sb.AppendLine();
         sb.AppendLine($"VEREDITO para {ev.Target.HActive}x{ev.Target.DisplayHeight} @ {ev.Target.RefreshHz:0.00} Hz: {ev.VerdictText}");
         sb.AppendLine("  " + ev.Summary);

@@ -327,3 +327,19 @@ public class DevicePathTests
     [InlineData(@"\\?\PCI#VEN_1002&DEV_73DF", GpuVendor.Amd)]
     public void Gpu_vendor(string path, GpuVendor v) => Assert.Equal(v, DevicePath.VendorFromPath(path));
 }
+
+public class BuildInfoTests
+{
+    [Fact]
+    public void Version_carries_build_identity_and_shows_in_outputs()
+    {
+        Assert.Matches(@"^\d+\.\d+\.\d+\+(sem-git|[0-9a-f]{7,}(-dirty)?)$", BuildInfo.Version);
+        Assert.NotEqual("?", BuildInfo.BuildDate);
+
+        var edid = EdidFactory.Gaming240();
+        var ctx = new MonitorContext { FriendlyName = "X", HardwareId = "GSM5BBF", InstanceId = "1&2&0&UID1", Edid = edid, Connection = ConnectionKind.DisplayPort };
+        var ev = Evaluator.Evaluate(ctx, CvtReducedBlanking.Compute(2560, 1440, 60));
+        Assert.Contains("Versão: UpRes " + BuildInfo.Version, ReportBuilder.Build(ctx, ev, false));
+        Assert.Contains(BuildInfo.Version, RegFileGenerator.Apply(ctx, ev.Override!));
+    }
+}

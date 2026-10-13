@@ -124,7 +124,8 @@ public static class RegFileGenerator
     private static string DefaultApplyComment(MonitorContext ctx, OverrideResult ov) =>
         $"Adiciona {string.Join(" e ", ov.Timings)} ao EDID de {Name(ctx)} via EDID override.\n" +
         $"Máquina: {Environment.MachineName}  |  HardwareID: {ctx.HardwareId}  |  InstanceID: {ctx.InstanceId}\n" +
-        "Gerado pelo UpRes (somente leitura). Válido APENAS para este monitor, nesta máquina, nesta porta.\n" +
+        $"Gerado por {BuildInfo.Display}, somente leitura.\n" +
+        "Válido APENAS para este monitor, nesta máquina, nesta porta.\n" +
         "O timing nativo continua como preferido; escolha a nova resolução em Configurações > Tela.\n" +
         "Alterações:\n" + string.Join("\n", ov.Changes.Select(c => "  - " + c));
 
