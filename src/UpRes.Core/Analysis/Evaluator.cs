@@ -370,7 +370,10 @@ public static class Evaluator
                     "Não há EDID_OVERRIDE nesta instância. Se o 1440p foi obtido hoje por script/override que depois foi removido " +
                     "(ex.: remediação do antivírus), ele pode SUMIR no próximo reinício ou reconexão do monitor. " +
                     "A aba 'Aplicar' grava o EDID atual como override para torná-lo permanente. Salve-a ANTES de reiniciar."));
-                source += " Atenção: sem override, o modo pode não sobreviver a um reinício; veja a aba 'Aplicar'.";
+                source = known?.FactoryEdidHas1440p == false
+                    ? $"O EDID de fábrica do {known.Name} NÃO traz {tLabel}: o EDID em uso é uma versão modificada guardada em cache, " +
+                      "sem EDID_OVERRIDE que a sustente. O modo deve SUMIR no próximo reinício ou reconexão do monitor. Salve e aplique a aba 'Aplicar' antes disso."
+                    : source + " Atenção: sem override, o modo pode não sobreviver a um reinício; veja a aba 'Aplicar'.";
             }
             return Finish(ev, Verdict.JaDisponivel, $"{tLabel} já está disponível em Configurações > Tela. {source}");
         }

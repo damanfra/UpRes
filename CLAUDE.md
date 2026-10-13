@@ -56,12 +56,18 @@ Build: `dotnet build UpRes.sln` · testes: `dotnet test` · publicar: `dotnet bu
 
 ## Descobertas (relatório real, 13/10/2026)
 - O monitor do Daniel é um **Multilaser MN801** (`MUL2380`): 24", 1080p, até 75 Hz, ligado por **HDMI** numa Intel Iris Xe. Não é o LG 27GN750. Ele **roda hoje em 2560×1440 @ 59 Hz**.
-- Na instância ativa (`4&12ecdce7&0&UID4145`) **não existe `EDID_OVERRIDE`**. Mesmo assim, o valor `Device Parameters\EDID` **já contém** os dois DTDs de 1440p, e o Range Limits declara H 30–90 kHz e 300 MHz. Há duas hipóteses:
-  - (a) o EDID de fábrica já traz 1440p;
-  - (b) o script antigo gravou direto no valor `EDID`, ou o override está noutro lugar.
+- Na instância ativa (`4&12ecdce7&0&UID4145`) **não existe `EDID_OVERRIDE`** (nem em nenhuma outra instância), mas o valor `Device Parameters\EDID` (igual ao WMI) **contém** os dois DTDs de 1440p.
+- **Arquivos originais recuperados** (`Aplicar-1440p.ps1/.reg`, `Desfazer-*`). O `.reg` está em `Fixtures/MUL2380_Aplicar-1440p_original.reg`. Conclusões:
+  - O script só gravou os DTDs 60 Hz e 50 Hz nos offsets `0xC3`/`0xD5` do bloco CTA e recalculou o checksum do bloco 1. **O bloco base, incluindo o Range Limits de fábrica (30–90 kHz / 300 MHz), não foi alterado.** Logo o EDID de fábrica é conhecido: é o atual sem esses dois DTDs (`RealEdidTests.Factory()`). Ele **não** traz 1440p.
+  - O `.reg` original tem exatamente os blocos que o UpRes gera a partir do EDID de fábrica (teste `Generated_reg_has_the_same_blocks_as_the_original_working_reg`).
+  - Depois de gravar, o script desativava e reativava o adaptador de vídeo, e foi isso que fez o Windows reler o EDID. A chave sumiu depois (provável remediação do SentinelOne); o EDID modificado segue em cache até a próxima redetecção.
+  - **Colega:** o `.ps1` percorria **todas** as instâncias de `MUL2380`, então o InstanceID não explica a falha **se** ele rodou o `.ps1`. Já o `.reg` antigo tem o InstanceID do Daniel fixo, e esse sim falharia. Outras causas possíveis no `.ps1`:
+    - offsets fixos (EDID com revisão diferente → "Ignorado…");
+    - falta de elevação ou ExecutionPolicy;
+    - bloqueio silencioso do SentinelOne.
 
-  Para separar as duas: o app agora varre **todos** os `EDID_OVERRIDE` de `Enum\DISPLAY`, compara o EDID do registro com o do WMI, e falta o relatório de uma máquina onde nada foi aplicado (a do colega).
-- **Correção do Daniel:** o MN801 só passou a rodar 1440p **hoje**, depois do script da sessão anterior. Logo o EDID de fábrica provavelmente não traz 1440p. Hipótese mais forte: a remediação do SentinelOne desfez as alterações de registro do processo bloqueado e apagou o `EDID_OVERRIDE`. O valor `EDID` ainda guarda o conteúdo modificado (cache da última detecção do monitor), então o modo **pode sumir no próximo reinício ou reconexão**. Por isso, quando não há override, o app oferece gravar o EDID atual como `EDID_OVERRIDE` (`Evaluation.PersistCurrent`).
+    Precisa do relatório do app na máquina dele.
+- **Correção do Daniel:** o MN801 só passou a rodar 1440p **hoje**, depois do script da sessão anterior. Confirmado pelos arquivos originais: o EDID de fábrica não traz 1440p. Hipótese mais forte para o sumiço da chave: a remediação do SentinelOne desfez as alterações de registro do processo bloqueado e apagou o `EDID_OVERRIDE`. O valor `EDID` ainda guarda o conteúdo modificado (cache da última detecção do monitor), então o modo **pode sumir no próximo reinício ou reconexão**. Por isso, quando não há override, o app oferece gravar o EDID atual como `EDID_OVERRIDE` (`Evaluation.PersistCurrent`). Para modelos com `FactoryEdidHas1440p == false` (o MN801), o app afirma que o modo vai sumir.
 - Calibração: o maior modo anunciado (185,59 MHz / 84,36 kHz) fica abaixo do necessário, mas o 1440p funciona. Por isso o `Evaluator` passou a considerar o **Range Limits declarado** como capacidade da entrada.
 - O EDID real está em `tests/UpRes.Core.Tests/Fixtures/MUL2380_MN801_registro.hex`.
 
